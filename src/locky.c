@@ -6,6 +6,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+#include <openssl/pem.h>
+
 typedef struct locky_peer_t locky_peer_t;
 
 struct locky_peer_t {
@@ -17,6 +19,7 @@ struct locky_peer_t {
 typedef struct {
   int socket;
   locky_peer_t *peers;
+  EC_KEY *pubKey;
 } locky_connection_t;
 
 enum {
@@ -26,13 +29,18 @@ const int SOCKET_QUEUE = 128;
 
 locky_peer_t *registerPeer(locky_connection_t *locky, locky_peer_t peer);
 
+void authPeer(locky_connection_t *locky, locky_peer_t *peer, char *payload) {
+  printf("do payload signature verification");
+}
+
 void connLoop(locky_connection_t *locky) {
-  int n;
   struct sockaddr_storage client;
   socklen_t addrlen = sizeof(client);
   char buffer[1024];
+  char *payload;
   locky_peer_t peer;
   locky_peer_t *p;
+  int n;
  
   while(1) {
     n = recvfrom(
@@ -41,6 +49,7 @@ void connLoop(locky_connection_t *locky) {
       0,
       (struct sockaddr *) &client,
       &addrlen);
+    payload = &(buffer[1]);
 
     if(n < 0)
       continue;
@@ -57,7 +66,27 @@ void connLoop(locky_connection_t *locky) {
 
     printf("received request (0x%02x) from %s:%s (%d bytes)\n", buffer[0], peer.addr, peer.port, n);
     p = registerPeer(locky, peer);
+
+    switch(buffer[0]) {
+      _LOCKY_REQ_METHOD_AUTH: authPeer(locky, p, payload); break;
+    }
   }
+}
+
+bool readPubKey(locky_connection_t *locky, char *pubKeyFile) {
+  FILE *fd;
+  EVP_PKEY *pubKey;
+
+  fd = fopen(pubKeyFile, "rb");
+  if(!fd)
+    return false;
+
+  pubKey = PEM_read_PUBKEY(fd, NULL, NULL, NULL);
+  if(!pubKey)
+    return false;
+
+  locky->pubKey = EVP_PKEY_get0_EC_KEY(pubKey);
+  return true;
 }
 
 locky_peer_t *registerPeer(locky_connection_t *locky, locky_peer_t peer) {
@@ -86,6 +115,11 @@ int main() {
   int n;
   locky_connection_t locky;
   locky.peers = NULL;
+
+  if(!readPubKey(&locky, "./keys/public.key.pem")) {
+    printf("ERROR: cannot read public key ./keys/public.key.pem\n");
+    return 1;
+  }
 
   memset(&hints, 0, sizeof(struct addrinfo));
   hints.ai_flags = AI_PASSIVE;
