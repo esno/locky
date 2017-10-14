@@ -28,43 +28,39 @@ typedef struct {
   EVP_PKEY *pubKey;
 } locky_connection_t;
 
+typedef struct {
+  unsigned char *data;
+  size_t size;
+} locky_message_t;
+
 enum {
-  _LOCKY_REQ_METHOD_AUTH = 31
+  _LOCKY_REQ_METHOD_AUTH = 0x31,
+  _LOCKY_REQ_METHOD_UNLOCK
 };
 const int _LOCKY_PKG_MSG_LENGTH_MAX = 256;
 const int SOCKET_QUEUE = 128;
 
-void methodAuth(locky_connection_t *locky, locky_peer_t *peer, char *data);
+void methodAuth(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *data);
+void methodUnlock(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *data);
 locky_peer_t *registerPeer(locky_connection_t *locky, locky_peer_t peer);
-void sendData(locky_peer_t *peer, char *msg, size_t length);
+void sendData(locky_peer_t *peer, locky_message_t *msg);
 
-bool authPeer(locky_connection_t *locky, locky_peer_t *peer, char *data) {
-  char l[3], chipher[256];
-  char *msg, *signature;
-  int length;
+bool authPeer(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *plaintext, locky_message_t *signature) {
   EVP_MD_CTX *ctx;
   const EVP_MD *md;
 
-  strncpy(l, data, 2);
-  l[3] = '\0';
-
-  length = strtol(l, NULL, 10);
-  if(length <= _LOCKY_PKG_MSG_LENGTH_MAX) {
-    strncpy(msg, &data[2], length);
-    strcpy(msg, &data[2 + length + 1]);
-
-    ctx = EVP_MD_CTX_create();
-    md = EVP_get_digestbyname("SHA256");
-    EVP_DigestInit_ex(ctx, md, NULL);
-    EVP_DigestVerifyInit(ctx, NULL,
-      md,
-      NULL,
-      locky->pubKey);
-    EVP_DigestVerifyUpdate(ctx, msg, length);
-    if(EVP_DigestVerifyFinal(ctx, signature, strlen(signature))) {
-      syscall(SYS_getrandom, &peer->cipher, 256, GRND_NONBLOCK);
-      return true;
-    }
+  ctx = EVP_MD_CTX_create();
+  md = EVP_get_digestbyname("SHA256");
+  EVP_DigestInit_ex(ctx, md, NULL);
+  EVP_DigestVerifyInit(ctx, NULL,
+    md, NULL,
+    locky->pubKey);
+  EVP_DigestVerifyUpdate(ctx,
+    plaintext->data, plaintext->size);
+  if(EVP_DigestVerifyFinal(ctx, signature->data, signature->size)) {
+    syscall(SYS_getrandom, &peer->cipher, 256, GRND_NONBLOCK);
+    printf("authenticated peer %s:%s\n", peer->addr, peer->port);
+    return true;
   }
 
   return false;
@@ -74,22 +70,25 @@ void connLoop(locky_connection_t *locky) {
   struct sockaddr_storage client;
   socklen_t addrlen = sizeof(client);
   char buffer[1024];
-  char *payload;
+  locky_message_t payload;
   locky_peer_t peer;
   locky_peer_t *p;
-  int n;
+  int method = 0;
  
   while(1) {
-    n = recvfrom(
+    payload.size = recvfrom(
       locky->socket,
       buffer, sizeof(buffer),
       0,
       (struct sockaddr *) &client,
       &addrlen);
-    payload = &(buffer[1]);
 
-    if(n < 0)
+    if(payload.size < 2)
       continue;
+
+    method = (int) buffer[0];
+    payload.size -= 1 * sizeof(char);
+    payload.data = &buffer[1];
 
     memset(peer.addr, 0, sizeof(peer.addr));
     memset(peer.port, 0, sizeof(peer.port));
@@ -101,16 +100,35 @@ void connLoop(locky_connection_t *locky) {
       peer.port, sizeof(peer.port),
       NI_NUMERICHOST);
 
-    printf("received request (0x%02x) from %s:%s (%d bytes)\n", buffer[0], peer.addr, peer.port, n);
+    printf("received request (0x%02x) from %s:%s (%d bytes)\n", method, peer.addr, peer.port, payload.size);
     p = registerPeer(locky, peer);
 
-    switch(buffer[0]) {
-      _LOCKY_REQ_METHOD_AUTH: methodAuth(locky, p, payload); break;
+    switch(method) {
+      case _LOCKY_REQ_METHOD_AUTH: methodAuth(locky, p, &payload); break;
+      case _LOCKY_REQ_METHOD_UNLOCK: methodUnlock(locky, p, &payload); break;
+      default: printf("request (0x%02x) not impemented...\n", method);
     }
   }
 }
 
-size_t encryptAsym(EVP_PKEY *pubKey, unsigned char *cipher, char *data) {
+size_t decryptSym(locky_peer_t *peer, unsigned char *plain, char *cipher, char *iv) {
+  EVP_CIPHER_CTX *ctx;
+  int length = strlen(cipher);
+  int l;
+
+  ctx = EVP_CIPHER_CTX_new();
+  if(ctx)
+    if(EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, peer->cipher, iv))
+      if(EVP_DecryptUpdate(ctx, plain, &length, cipher, length)) {
+        plain = OPENSSL_malloc(length);
+        EVP_DecryptFinal_ex(ctx, plain + length, &l);
+        return l;
+      }
+
+  return 0;
+}
+
+void encryptAsym(EVP_PKEY *pubKey, locky_message_t *crypt, char *data) {
   EVP_PKEY_CTX *ctx;
   ENGINE *eng;
   size_t i, o;
@@ -121,26 +139,52 @@ size_t encryptAsym(EVP_PKEY *pubKey, unsigned char *cipher, char *data) {
     if(EVP_PKEY_encrypt_init(ctx) > 0)
       if(EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_OAEP_PADDING) > 0)
         if(EVP_PKEY_encrypt(ctx, NULL, &o, data, i) > 0) {
-          cipher = OPENSSL_malloc(o);
-          if(cipher)
-            EVP_PKEY_encrypt(ctx, cipher, &o, data, i);
-            return o;
+          crypt->size = o;
+          crypt->data = OPENSSL_malloc(crypt->size);
+          if(crypt->data) {
+            EVP_PKEY_encrypt(ctx, crypt->data, &crypt->size, data, i);
+          }
         }
-  return 0;
 }
 
-void methodAuth(locky_connection_t *locky, locky_peer_t *peer, char *data) {
-  unsigned char *cipher;
-  size_t length;
+void methodAuth(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *data) {
+  locky_message_t plaintext, signature, crypt;
+  int s;
 
-  if(authPeer(locky, peer, data)) {
-    length = encryptAsym(locky->pubKey, cipher, peer->cipher);
-    if(length > 0) {
-      printf("send random key to %s:%s", peer->addr, peer->port);
-      sendData(peer, cipher, length);
-      OPENSSL_free(cipher);
+  s |= (data->data[0] << (sizeof(char) * 8));
+  s |= (data->data[1]);
+  plaintext.size = s;
+  signature.size = data->size - plaintext.size - 2;
+
+  if(plaintext.size <= ((data->size - 2) / 2)) {
+    char pt[plaintext.size];
+    char sig[signature.size];
+    memcpy(pt, &data->data[2], plaintext.size);
+    memcpy(sig, &data->data[2 + plaintext.size], s);
+    plaintext.data = pt;
+    signature.data = sig;
+
+    if(authPeer(locky, peer, &plaintext, &signature)) {
+      encryptAsym(locky->pubKey, &crypt, peer->cipher);
+
+      if(crypt.size > 0) {
+        sendData(peer, &crypt);
+        OPENSSL_free(crypt.data);
+      }
     }
   }
+}
+
+void methodUnlock(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *data) {
+  unsigned char *cipher, *plain;
+  char iv[16];
+
+  /*
+  strncpy(iv, data, 16);
+  cipher = &data[16];
+  decryptSym(peer, plain, cipher, iv);
+  printf("received key %s\n", plain);
+  */
 }
 
 bool readPubKey(locky_connection_t *locky, char *pubKeyFile) {
@@ -180,7 +224,7 @@ locky_peer_t *registerPeer(locky_connection_t *locky, locky_peer_t peer) {
   return new;
 }
 
-void sendData(locky_peer_t *peer, char *msg, size_t length) {
+void sendData(locky_peer_t *peer, locky_message_t *msg) {
   struct addrinfo hints, *res;
   int n, fd;
 
@@ -197,8 +241,9 @@ void sendData(locky_peer_t *peer, char *msg, size_t length) {
       res->ai_protocol);
     if(fd >= 0) {
       connect(fd, res->ai_addr, res->ai_addrlen);
-      write(fd, msg, length);
+      write(fd, msg->data, msg->size);
       close(fd);
+      printf("sent random key to %s:%s\n", peer->addr, peer->port);
     }
   }
   freeaddrinfo(res);
