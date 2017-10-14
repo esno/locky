@@ -1,0 +1,13 @@
+#!/usr/bin/env lua
+
+local locky = require('locky')
+
+local unlock = {}
+
+function unlock.run(self)
+  locky:init('localhost', 23420)
+  locky:auth(arg[1])
+  local secret = locky:waitForSecret(arg[1])
+end
+
+unlock:run()

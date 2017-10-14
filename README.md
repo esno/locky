@@ -23,3 +23,7 @@ a daemon to remotely unklock luks container.
 
 `size` is the size of `message`
 
+if signature is fine the server generates a random key and sends it ecrypted to the client.
+
+| secret |
+| n byte |

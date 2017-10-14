@@ -13,12 +13,16 @@
 #include <openssl/rsa.h>
 #include <openssl/engine.h>
 
+#define _LOCKY_SYM_KEY_SIZE 256
+#define _LOCKY_PKG_MSG_LENGTH_MAX 256
+#define  SOCKET_QUEUE 128
+
 typedef struct locky_peer_t locky_peer_t;
 
 struct locky_peer_t {
   char addr[NI_MAXHOST];
   char port[NI_MAXSERV];
-  char cipher[256];
+  char cipher[_LOCKY_SYM_KEY_SIZE];
   locky_peer_t *next;
 };
 
@@ -37,28 +41,25 @@ enum {
   _LOCKY_REQ_METHOD_AUTH = 0x31,
   _LOCKY_REQ_METHOD_UNLOCK
 };
-const int _LOCKY_PKG_MSG_LENGTH_MAX = 256;
-const int SOCKET_QUEUE = 128;
 
 void methodAuth(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *data);
 void methodUnlock(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *data);
 locky_peer_t *registerPeer(locky_connection_t *locky, locky_peer_t peer);
-void sendData(locky_peer_t *peer, locky_message_t *msg);
+void sendData(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *msg);
 
 bool authPeer(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *plaintext, locky_message_t *signature) {
   EVP_MD_CTX *ctx;
   const EVP_MD *md;
+  unsigned char d[EVP_MAX_MD_SIZE];
+  unsigned l;
 
   ctx = EVP_MD_CTX_create();
-  md = EVP_get_digestbyname("SHA256");
+  md = EVP_get_digestbyname("sha256");
   EVP_DigestInit_ex(ctx, md, NULL);
-  EVP_DigestVerifyInit(ctx, NULL,
-    md, NULL,
-    locky->pubKey);
-  EVP_DigestVerifyUpdate(ctx,
-    plaintext->data, plaintext->size);
-  if(EVP_DigestVerifyFinal(ctx, signature->data, signature->size)) {
-    syscall(SYS_getrandom, &peer->cipher, 256, GRND_NONBLOCK);
+  EVP_DigestUpdate(ctx, plaintext->data, plaintext->size);
+
+  if(EVP_VerifyFinal(ctx, signature->data, signature->size, locky->pubKey) == 1) {
+    syscall(SYS_getrandom, &peer->cipher, _LOCKY_SYM_KEY_SIZE, GRND_NONBLOCK);
     printf("authenticated peer %s:%s\n", peer->addr, peer->port);
     return true;
   }
@@ -132,18 +133,18 @@ size_t decryptSym(locky_peer_t *peer, unsigned char *plain, char *cipher, char *
 void encryptAsym(EVP_PKEY *pubKey, locky_message_t *crypt, char *data) {
   EVP_PKEY_CTX *ctx;
   ENGINE *eng;
-  size_t i, o;
+  size_t o;
 
   eng = ENGINE_get_default_RSA();
   ctx = EVP_PKEY_CTX_new(pubKey, eng);
   if(ctx)
     if(EVP_PKEY_encrypt_init(ctx) > 0)
-      if(EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_OAEP_PADDING) > 0)
-        if(EVP_PKEY_encrypt(ctx, NULL, &o, data, i) > 0) {
+      if(EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING) > 0)
+        if(EVP_PKEY_encrypt(ctx, NULL, &o, data, _LOCKY_SYM_KEY_SIZE) > 0) {
           crypt->size = o;
           crypt->data = OPENSSL_malloc(crypt->size);
           if(crypt->data) {
-            EVP_PKEY_encrypt(ctx, crypt->data, &crypt->size, data, i);
+            EVP_PKEY_encrypt(ctx, crypt->data, &crypt->size, data, _LOCKY_SYM_KEY_SIZE);
           }
         }
 }
@@ -170,7 +171,7 @@ void methodAuth(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *
       encryptAsym(locky->pubKey, &crypt, peer->cipher);
 
       if(crypt.size > 0) {
-        sendData(peer, &crypt);
+        sendData(locky, peer, &crypt);
         OPENSSL_free(crypt.data);
       }
     }
@@ -226,9 +227,9 @@ locky_peer_t *registerPeer(locky_connection_t *locky, locky_peer_t peer) {
   return new;
 }
 
-void sendData(locky_peer_t *peer, locky_message_t *msg) {
+void sendData(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *msg) {
   struct addrinfo hints, *res;
-  int n, fd;
+  int n;
 
   memset(&hints, 0, sizeof(struct addrinfo));
   hints.ai_family = AF_UNSPEC;
@@ -237,14 +238,8 @@ void sendData(locky_peer_t *peer, locky_message_t *msg) {
   n = getaddrinfo(peer->addr, peer->port, &hints, &res);
 
   if(n >= 0) {
-    fd = socket(
-      res->ai_family,
-      res->ai_socktype,
-      res->ai_protocol);
-    if(fd >= 0) {
-      connect(fd, res->ai_addr, res->ai_addrlen);
-      write(fd, msg->data, msg->size);
-      close(fd);
+    if(sendto(locky->socket, msg->data, msg->size, 0,
+        res->ai_addr, res->ai_addrlen) > 0) {
       printf("sent random key to %s:%s\n", peer->addr, peer->port);
     }
   }
