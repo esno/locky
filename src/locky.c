@@ -63,6 +63,7 @@ bool authPeer(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *pl
     return true;
   }
 
+  printf("failed to verify message signature from %s:%s\n", peer->addr, peer->port);
   return false;
 }
 
@@ -149,18 +150,19 @@ void encryptAsym(EVP_PKEY *pubKey, locky_message_t *crypt, char *data) {
 
 void methodAuth(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *data) {
   locky_message_t plaintext, signature, crypt;
-  int s;
+  int s = 0;
 
   s |= (data->data[0] << (sizeof(char) * 8));
   s |= (data->data[1]);
   plaintext.size = s;
-  signature.size = data->size - plaintext.size - 2;
+  signature.size = data->size - plaintext.size - (sizeof(char) *2);
 
+  printf("deserialize auth message (size: %d/%d/%d)\n", plaintext.size, signature.size, data->size);
   if(plaintext.size <= ((data->size - 2) / 2)) {
     char pt[plaintext.size];
     char sig[signature.size];
     memcpy(pt, &data->data[2], plaintext.size);
-    memcpy(sig, &data->data[2 + plaintext.size], s);
+    memcpy(sig, &data->data[2 + plaintext.size], signature.size);
     plaintext.data = pt;
     signature.data = sig;
 
