@@ -1,5 +1,5 @@
-LDFLAGS_LOCKY += -lcrypto -lssl
-LDFLAGS_LUKSD += -lcryptsetup
+LDFLAGS_LOCKY += -lcrypto -lssl ${LDFLAGS}
+LDFLAGS_LUKSD += -lcryptsetup ${LDFLAGS}
 
 all: locky luksd
 

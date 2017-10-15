@@ -60,7 +60,7 @@ root privileges and opens a publicly available udp socket.
 
 ## usage
 
-    locky <luksDevice> <luksName> <socketOwner> <socketGroup>
+    ./locky <luksDevice> <luksName> <socketOwner> <socketGroup>
 
 # unlock
 
@@ -70,6 +70,6 @@ root privileges and opens a publicly available udp socket.
 
     make keys
 
-## USAGE
+## usage
 
-    unlock <host> <privateKey>
+    ./unlock <host> <privateKey>
