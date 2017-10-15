@@ -1,21 +1,27 @@
 # locky
 
-a daemon to remotely unklock luks container.
+locky is a daemon that opens an upd socket and waits for a msg signed by your private rsa key.
+After the signature verification locky starts a key exchange for symmetric cryptography.
+Now the client has to send the luks cipher. Locky forwards this key via `unix socket` to `luksd`.
 
-# protocol
+## build instructions
+
+    make locky
+
+## protocol
 
 | method | payload |
 | ------ | ------- |
 | 1 byte | n byte  |
 
-## methods
+### methods
 
 | code | method |
 | ---- | ------ |
 | 0x31 | auth   |
 | 0x32 | unlock |
 
-## auth
+#### auth
 
 | size   | message | signature |
 | ------ | ------- | --------- |
@@ -29,7 +35,7 @@ if signature is fine the server generates a random key and sends it ecrypted to 
 | ------ |
 | n byte |
 
-## unlock
+#### unlock
 
 | iv      | crypt  |
 | ------- | ------ |
@@ -37,3 +43,29 @@ if signature is fine the server generates a random key and sends it ecrypted to 
 
 `iv` has to be generated on sender site and has to be **unique** for each message.
 `crypt` is the encrypted token used at luks encryption.
+
+# luksd
+
+a daemon to localy unlock luks container. It opens an `unix socket` and waits for password entries.
+This is a separate daemon to avoid the situation that a piece of software is running with
+root privileges and opens a publicly available udp socket.
+
+## build instructions
+
+    make luksd
+
+## USAGE
+
+    locky <luksDevice> <luksName> <socketOwner> <socketGroup>
+
+# unlock
+
+`unlock` is the reference cli client for `locky` written in lua.
+
+## generate keys
+
+    make keys
+
+## USAGE
+
+    unlock <privateKey>

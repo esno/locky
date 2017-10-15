@@ -1,4 +1,5 @@
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <string.h>
@@ -15,7 +16,8 @@
 
 #define _LOCKY_SYM_KEY_SIZE 32
 #define _LOCKY_PKG_MSG_LENGTH_MAX 256
-#define  SOCKET_QUEUE 128
+#define _LUKSD_BUFFER_SIZE 1024
+#define SOCKET_QUEUE 128
 
 typedef struct locky_peer_t locky_peer_t;
 
@@ -46,7 +48,7 @@ void methodAuth(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *
 void methodUnlock(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *data);
 locky_peer_t *registerPeer(locky_connection_t *locky, locky_peer_t peer);
 void sendData(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *msg);
-void unlockLuks(locky_message_t luksKey);
+void unlockLuks(locky_message_t *luksKey);
 
 bool authPeer(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *plaintext, locky_message_t *signature) {
   EVP_MD_CTX *ctx;
@@ -191,8 +193,8 @@ void methodUnlock(locky_connection_t *locky, locky_peer_t *peer, locky_message_t
   plaintext.data = plain;
 
   if(decryptSym(iv, peer->cipher, &plaintext, &cipher))
-    printf("received luks key from %s:%s\n", peer->addr, peer->port);
-    unlockLuks(plaintext);
+    printf("received luks key (%d) from %s:%s\n", plaintext.size, peer->addr, peer->port);
+    unlockLuks(&plaintext);
 }
 
 bool readPubKey(locky_connection_t *locky, char *pubKeyFile) {
@@ -251,8 +253,24 @@ void sendData(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *ms
   freeaddrinfo(res);
 }
 
-void unlockLuks(locky_message_t luksKey) {
+void unlockLuks(locky_message_t *luksKey) {
+  int fd, rc;
+  struct sockaddr_un addr;
+  char buffer[_LUKSD_BUFFER_SIZE];
 
+  addr.sun_family = AF_UNIX;
+  strcpy(addr.sun_path, "/run/luksd.sock");
+  fd = socket(AF_UNIX, SOCK_STREAM, 0);
+  if(fd > 0) {
+    rc = connect(fd,
+      (struct sockaddr *) &addr,
+      sizeof(addr));
+    if(rc == 0) {
+      send(fd, luksKey->data, luksKey->size, 0);
+      rc = recv(fd, buffer, _LUKSD_BUFFER_SIZE, 0);
+    }
+    close(fd);
+  }
 }
 
 int main() {
@@ -262,7 +280,7 @@ int main() {
   locky.peers = NULL;
 
   if(!readPubKey(&locky, "./keys/public.key.pem")) {
-    printf("ERROR: cannot read public key ./keys/public.key.pem\n");
+    fprintf(stderr, "cannot read public key ./keys/public.key.pem\n");
     return 1;
   }
 

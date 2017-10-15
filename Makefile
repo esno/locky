@@ -1,6 +1,7 @@
-LDFLAGS += -lcrypto -lssl
+LDFLAGS_LOCKY += -lcrypto -lssl
+LDFLAGS_LUKSD += -lcryptsetup
 
-all: locky
+all: locky luksd
 
 keys:
 	install -m 0700 -d keys
@@ -10,7 +11,10 @@ keys:
 	#openssl ec -in keys/private.key.pem -pubout -out keys/public.key.pem
 
 locky:
-	${CC} ${LDFLAGS} -o locky src/locky.c
+	${CC} ${LDFLAGS_LOCKY} -o locky src/locky.c
+
+luksd:
+	${CC} ${LDFLAGS_LUKSD} -o luksd src/luksd.c
 
 clean:
-	rm -rf locky
+	rm -rf locky luksd
