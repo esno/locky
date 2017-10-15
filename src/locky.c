@@ -13,7 +13,7 @@
 #include <openssl/rsa.h>
 #include <openssl/engine.h>
 
-#define _LOCKY_SYM_KEY_SIZE 256
+#define _LOCKY_SYM_KEY_SIZE 32
 #define _LOCKY_PKG_MSG_LENGTH_MAX 256
 #define  SOCKET_QUEUE 128
 
@@ -46,6 +46,7 @@ void methodAuth(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *
 void methodUnlock(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *data);
 locky_peer_t *registerPeer(locky_connection_t *locky, locky_peer_t peer);
 void sendData(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *msg);
+void unlockLuks(locky_message_t luksKey);
 
 bool authPeer(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *plaintext, locky_message_t *signature) {
   EVP_MD_CTX *ctx;
@@ -113,21 +114,22 @@ void connLoop(locky_connection_t *locky) {
   }
 }
 
-size_t decryptSym(locky_peer_t *peer, unsigned char *plain, char *cipher, char *iv) {
+bool decryptSym(unsigned char *iv, char *secret, locky_message_t *plaintext, locky_message_t *cipher) {
   EVP_CIPHER_CTX *ctx;
-  int length = strlen(cipher);
-  int l;
+  int l = plaintext->size;
 
   ctx = EVP_CIPHER_CTX_new();
   if(ctx)
-    if(EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, peer->cipher, iv))
-      if(EVP_DecryptUpdate(ctx, plain, &length, cipher, length)) {
-        plain = OPENSSL_malloc(length);
-        EVP_DecryptFinal_ex(ctx, plain + length, &l);
-        return l;
+    if(EVP_CipherInit_ex(ctx, EVP_aes_256_cbc(),
+        NULL, secret, iv, 0))
+      if(EVP_CipherUpdate(ctx, plaintext->data, &l,
+          cipher->data, cipher->size)) {
+        EVP_CipherFinal(ctx, plaintext->data, &l);
+        plaintext->size = l;
+        return true;
       }
 
-  return 0;
+  return false;
 }
 
 void encryptAsym(EVP_PKEY *pubKey, locky_message_t *crypt, char *data) {
@@ -179,15 +181,18 @@ void methodAuth(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *
 }
 
 void methodUnlock(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *data) {
-  unsigned char *cipher, *plain;
-  char iv[16];
+  locky_message_t cipher, plaintext;
+  unsigned char iv[16], plain[data->size - 16];
 
-  /*
-  strncpy(iv, data, 16);
-  cipher = &data[16];
-  decryptSym(peer, plain, cipher, iv);
-  printf("received key %s\n", plain);
-  */
+  memcpy(iv, &data->data[0], 16);
+  cipher.size = data->size - 16;
+  cipher.data = &data->data[16];
+  plaintext.size = cipher.size;
+  plaintext.data = plain;
+
+  if(decryptSym(iv, peer->cipher, &plaintext, &cipher))
+    printf("received luks key from %s:%s\n", peer->addr, peer->port);
+    unlockLuks(plaintext);
 }
 
 bool readPubKey(locky_connection_t *locky, char *pubKeyFile) {
@@ -244,6 +249,10 @@ void sendData(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *ms
     }
   }
   freeaddrinfo(res);
+}
+
+void unlockLuks(locky_message_t luksKey) {
+
 }
 
 int main() {

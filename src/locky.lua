@@ -1,6 +1,8 @@
 local os = require('os')
+local opensslCipher = require('openssl.cipher')
 local opensslDigest = require('openssl.digest')
 local opensslPkey = require('openssl.pkey')
+local opensslRand = require('openssl.rand')
 local socket = require('socket')
 
 local locky = {
@@ -39,6 +41,19 @@ function locky.auth(self, privateKeyFile)
   )
 end
 
+function locky.unlock(self, luksKey, secret)
+  local iv = opensslRand.bytes(16)
+  local cipher = opensslCipher.new('aes-256-cbc')
+  cipher = cipher:encrypt(secret, iv)
+  cipher:update(luksKey)
+
+  locky.udp:send(
+    locky.method.UNLOCK ..
+    iv ..
+    cipher:final()
+  )
+end
+
 function locky.waitForSecret(self, privateKeyFile)
   local fd = io.open(privateKeyFile, 'r')
   local privateKey = fd:read('*a')
@@ -52,5 +67,7 @@ function locky.waitForSecret(self, privateKeyFile)
     return plain
   end
 end
+
+
 
 return locky

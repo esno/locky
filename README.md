@@ -26,4 +26,14 @@ a daemon to remotely unklock luks container.
 if signature is fine the server generates a random key and sends it ecrypted to the client.
 
 | secret |
+| ------ |
 | n byte |
+
+## unlock
+
+| iv      | crypt  |
+| ------- | ------ |
+| 16 byte | n byte |
+
+`iv` has to be generated on sender site and has to be **unique** for each message.
+`crypt` is the encrypted token used at luks encryption.
