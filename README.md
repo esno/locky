@@ -66,6 +66,12 @@ root privileges and opens a publicly available udp socket.
 
 `unlock` is the reference cli client for `locky` written in lua.
 
+## install
+
+_requires lua 5.3_
+
+    luarocks install locky
+
 ## generate keys
 
     make keys
