@@ -8,6 +8,10 @@ Now the client has to send the luks cipher. Locky forwards this key via `unix so
 
     make locky
 
+## usage
+
+    ./locky <publicKey>
+
 ## protocol
 
 | method | payload |
@@ -54,7 +58,7 @@ root privileges and opens a publicly available udp socket.
 
     make luksd
 
-## USAGE
+## usage
 
     locky <luksDevice> <luksName> <socketOwner> <socketGroup>
 
@@ -68,4 +72,4 @@ root privileges and opens a publicly available udp socket.
 
 ## USAGE
 
-    unlock <privateKey>
+    unlock <host> <privateKey>

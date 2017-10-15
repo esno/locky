@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <syscall.h>
 #include <linux/random.h>
+#include <sys/stat.h>
 
 #include <openssl/pem.h>
 #include <openssl/evp.h>
@@ -303,14 +304,28 @@ bool unlockLuks(locky_message_t *luksKey) {
   return false;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
   struct addrinfo hints, *res, *resSave;
   int n;
   locky_connection_t locky;
   locky.peers = NULL;
+  struct stat pubKeyFile;
 
-  if(!readPubKey(&locky, "./keys/public.key.pem")) {
-    fprintf(stderr, "cannot read public key ./keys/public.key.pem\n");
+  if(argc != 2) {
+    printf("USAGE: %s <publicKey>\n",
+      argv[0]);
+    return 1;
+  }
+
+  if(stat(argv[1], &pubKeyFile) != 0) {
+    fprintf(stderr, "cannot stat public key file %s\n",
+      argv[1]);
+    return 1;
+  }
+
+  if(!readPubKey(&locky, argv[1])) {
+    fprintf(stderr, "cannot read public key %s\n",
+      argv[1]);
     return 1;
   }
 
