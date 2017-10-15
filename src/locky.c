@@ -44,11 +44,12 @@ enum {
   _LOCKY_REQ_METHOD_UNLOCK
 };
 
+void deregisterPeers(locky_connection_t *locky);
 void methodAuth(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *data);
-void methodUnlock(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *data);
+bool methodUnlock(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *data);
 locky_peer_t *registerPeer(locky_connection_t *locky, locky_peer_t peer);
 void sendData(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *msg);
-void unlockLuks(locky_message_t *luksKey);
+bool unlockLuks(locky_message_t *luksKey);
 
 bool authPeer(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *plaintext, locky_message_t *signature) {
   EVP_MD_CTX *ctx;
@@ -79,8 +80,9 @@ void connLoop(locky_connection_t *locky) {
   locky_peer_t peer;
   locky_peer_t *p;
   int method = 0;
+  bool running = true;
  
-  while(1) {
+  while(running) {
     payload.size = recvfrom(
       locky->socket,
       buffer, sizeof(buffer),
@@ -110,10 +112,12 @@ void connLoop(locky_connection_t *locky) {
 
     switch(method) {
       case _LOCKY_REQ_METHOD_AUTH: methodAuth(locky, p, &payload); break;
-      case _LOCKY_REQ_METHOD_UNLOCK: methodUnlock(locky, p, &payload); break;
+      case _LOCKY_REQ_METHOD_UNLOCK: running = !methodUnlock(locky, p, &payload); break;
       default: printf("request (0x%02x) not impemented...\n", method);
     }
   }
+
+  deregisterPeers(locky);
 }
 
 bool decryptSym(unsigned char *iv, char *secret, locky_message_t *plaintext, locky_message_t *cipher) {
@@ -132,6 +136,16 @@ bool decryptSym(unsigned char *iv, char *secret, locky_message_t *plaintext, loc
       }
 
   return false;
+}
+
+void deregisterPeers(locky_connection_t *locky) {
+  locky_peer_t *ptr;
+
+  while(locky->peers->next) {
+    ptr = locky->peers;
+    locky->peers = locky->peers->next;
+    free(ptr);
+  }
 }
 
 void encryptAsym(EVP_PKEY *pubKey, locky_message_t *crypt, char *data) {
@@ -182,8 +196,8 @@ void methodAuth(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *
   }
 }
 
-void methodUnlock(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *data) {
-  locky_message_t cipher, plaintext;
+bool methodUnlock(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *data) {
+  locky_message_t cipher, plaintext, response;
   unsigned char iv[16], plain[data->size - 16];
 
   memcpy(iv, &data->data[0], 16);
@@ -192,9 +206,17 @@ void methodUnlock(locky_connection_t *locky, locky_peer_t *peer, locky_message_t
   plaintext.size = cipher.size;
   plaintext.data = plain;
 
-  if(decryptSym(iv, peer->cipher, &plaintext, &cipher))
+  if(decryptSym(iv, peer->cipher, &plaintext, &cipher)) {
     printf("received luks key (%d) from %s:%s\n", plaintext.size, peer->addr, peer->port);
-    unlockLuks(&plaintext);
+    if(unlockLuks(&plaintext)) {
+      encryptAsym(locky->pubKey, &response, "success");
+      sendData(locky, peer, &response);
+      OPENSSL_free(response.data);
+      return true;
+    }
+  }
+
+  return false;
 }
 
 bool readPubKey(locky_connection_t *locky, char *pubKeyFile) {
@@ -247,13 +269,13 @@ void sendData(locky_connection_t *locky, locky_peer_t *peer, locky_message_t *ms
   if(n >= 0) {
     if(sendto(locky->socket, msg->data, msg->size, 0,
         res->ai_addr, res->ai_addrlen) > 0) {
-      printf("sent random key to %s:%s\n", peer->addr, peer->port);
+      printf("sent message to %s:%s (%d bytes)\n", peer->addr, peer->port, msg->size);
     }
   }
   freeaddrinfo(res);
 }
 
-void unlockLuks(locky_message_t *luksKey) {
+bool unlockLuks(locky_message_t *luksKey) {
   int fd, rc;
   struct sockaddr_un addr;
   char buffer[_LUKSD_BUFFER_SIZE];
@@ -266,11 +288,19 @@ void unlockLuks(locky_message_t *luksKey) {
       (struct sockaddr *) &addr,
       sizeof(addr));
     if(rc == 0) {
+      printf("send secret to luksd\n");
       send(fd, luksKey->data, luksKey->size, 0);
       rc = recv(fd, buffer, _LUKSD_BUFFER_SIZE, 0);
     }
     close(fd);
   }
+
+  if(rc > 0 && strcmp("ack", buffer) == 0) {
+    printf("received acknowledgement from luksd\n");
+    return true;
+  }
+
+  return false;
 }
 
 int main() {

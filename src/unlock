@@ -1,14 +1,31 @@
 #!/usr/bin/env lua
 
 local locky = require('locky')
+local os = require('os')
 
 local unlock = {}
 
 function unlock.run(self)
-  locky:init('localhost', 23420)
-  locky:auth(arg[1])
-  local secret = locky:waitForSecret(arg[1])
-  locky:unlock('hello world', secret)
+  if arg[1] and arg[2] then
+    locky:init(arg[1], 23420)
+    locky:auth(arg[2])
+    local secret = locky:waitForMsg(arg[2])
+    if secret then
+      locky:unlock(secret)
+      --disabled because it segfaults
+      --local success = locky:waitForMsg(arg[2])
+      os.exit(0)
+      if success == "success" then
+        os.exit(0)
+      end
+      print('failed to unlock remote disk')
+      os.exit(1)
+    end
+    print('failed to get shared secret')
+    os.exit(1)
+  end
+  print('USAGE: ' .. arg[0] .. ' <hostname> <privateKey>')
+  os.exit(1)
 end
 
 unlock:run()

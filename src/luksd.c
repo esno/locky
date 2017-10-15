@@ -29,6 +29,7 @@ void connLoop(luksd_connection_t *luksd) {
   int fd;
   size_t n;
   char buffer[_LUKSD_BUFFER_SIZE];
+  char response[_LUKSD_BUFFER_SIZE];
   bool running = true;
 
   luksd->addrlen = sizeof(struct sockaddr_in);
@@ -43,6 +44,12 @@ void connLoop(luksd_connection_t *luksd) {
       if(n > 0) {
         buffer[n] = '\0';
         running = !unlockLuks(luksd->device, luksd->name, buffer, n);
+        if(!running)
+          strcpy(response, "ack");
+        else
+          strcpy(response, "nak");
+
+        send(fd, response, strlen(response), 0);
       }
     }
     close(fd);
@@ -84,7 +91,7 @@ int main(int argc, char *argv[]) {
   struct passwd *pwd;
   struct group *grp;
   char *socketOwner, *socketGroup;
-  struct stat *luksBlkDev;
+  struct stat luksBlkDev;
   int i;
 
   if(argc != 5) {
@@ -98,12 +105,12 @@ int main(int argc, char *argv[]) {
   socketOwner = argv[3];
   socketGroup = argv[4];
 
-  if(stat(luksd.device, luksBlkDev) != 0) {
+  if(stat(luksd.device, &luksBlkDev) != 0) {
     fprintf(stderr, "cannot stat blockdevice %s\n", luksd.device);
     return 1;
   }
 
-  if(S_ISBLK(luksBlkDev->st_mode) != 0) {
+  if(S_ISBLK(luksBlkDev.st_mode) == 0) {
     fprintf(stderr, "%s is not a blockdevice\n", luksd.device);
     return 1;
   }
@@ -124,11 +131,9 @@ int main(int argc, char *argv[]) {
   if(luksd.socket > 0) {
     unlink("/run/luksd.sock");
     if(bind(luksd.socket, (struct sockaddr *) &luksd.addr, sizeof(luksd.addr)) == 0) {
-      printf("world\n");
       chown("/run/luksd.sock", pwd->pw_uid, grp->gr_gid);
       chmod("/run/luksd.sock", 0770);
       if(listen(luksd.socket, 5) == 0)
-        printf("foo\n");
         connLoop(&luksd);
     }
     close(luksd.socket);

@@ -1,4 +1,5 @@
 local os = require('os')
+local io = require('io')
 local opensslCipher = require('openssl.cipher')
 local opensslDigest = require('openssl.digest')
 local opensslPkey = require('openssl.pkey')
@@ -12,6 +13,24 @@ local locky = {
   },
   udp = socket.udp()
 }
+
+local _getPassword = function(prompt)
+  os.execute('stty -echo raw')
+  if prompt then io.write(prompt) end
+  repeat
+    local c = io.read(1)
+    -- \127 is backspace
+    if c == '\127' and #(password or '') > 0 then
+      password = password:sub(1, -2)
+    elseif c ~= '\r' then
+      password = (password or '') .. c
+    end
+  until c == '\r'
+  os.execute('stty sane')
+  io.write('\n')
+  io.flush()
+  return password
+end
 
 function locky.init(self, hostname, port)
   locky.udp:setsockname('*', 0)
@@ -41,7 +60,8 @@ function locky.auth(self, privateKeyFile)
   )
 end
 
-function locky.unlock(self, luksKey, secret)
+function locky.unlock(self, secret)
+  local luksKey = _getPassword('LUKS Key: ')
   local iv = opensslRand.bytes(16)
   local cipher = opensslCipher.new('aes-256-cbc')
   cipher = cipher:encrypt(secret, iv)
@@ -54,7 +74,7 @@ function locky.unlock(self, luksKey, secret)
   )
 end
 
-function locky.waitForSecret(self, privateKeyFile)
+function locky.waitForMsg(self, privateKeyFile)
   local fd = io.open(privateKeyFile, 'r')
   local privateKey = fd:read('*a')
   fd:close()
@@ -63,11 +83,9 @@ function locky.waitForSecret(self, privateKeyFile)
 
   local data = locky.udp:receive()
   if data then
-    local plain = key:decrypt(data)
-    return plain
+    return key:decrypt(data)
   end
+  return nil
 end
-
-
 
 return locky
