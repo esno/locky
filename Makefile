@@ -16,9 +16,12 @@ rluksd_luksd.o:
 rluksd_crypt.o:
 	${CC} -c src/rluksd_crypt.c -I./src/include -lcrypto -lssl
 
-rluksd: rluksd_luksd.o rluksd_crypt.o
+rluksd_net.o:
+	${CC} -c src/rluksd_net.c -I./src/include
+
+rluksd: rluksd_luksd.o rluksd_crypt.o rluksd_net.o
 	${CC} -c src/rluksd.c -I./src/include
-	${CC} -o rluksd rluksd_luksd.o rluksd_crypt.o rluksd.o -lssl
+	${CC} -o rluksd rluksd_luksd.o rluksd_crypt.o rluksd_net.o rluksd.o -lcrypto -lssl
 
 luksd:
 	${CC} src/luksd.c -o luksd ${LDFLAGS_LUKSD}
