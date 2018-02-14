@@ -58,7 +58,8 @@ void rluksd_handle_req_auth(rluksd_mgr_t *rluksd, rluksd_message_t *msg)
 {
   if(msg->message && msg->signature)
   {
-    if(rluksd_crypt_verify_signature(msg) == 0)
+    if(rluksd_verify_nonce(rluksd, msg) == 0 &&
+        rluksd_crypt_verify_signature(rluksd, msg) == 0)
     {
       rluksd_register_peer(rluksd, &msg->peer);
     }
@@ -109,4 +110,33 @@ void rluksd_usage(void)
   fprintf(stdout, " <pubkey>\tpath to the public key\n");
   fprintf(stdout, " <socket>\tpath to the luksd socket file (optional)\n");
   fprintf(stdout, "\t\tdefault: /run/luksd.sock\n");
+}
+
+int rluksd_verify_nonce(rluksd_mgr_t *rluksd, rluksd_message_t *msg)
+{
+  rluksd_nonce_t *nonce = rluksd->nonce;
+  rluksd_nonce_t *new;
+
+  while(nonce)
+  {
+    if(memcmp(nonce->nonce, msg->message, msg->message_l) == 0)
+      return -1;
+
+    nonce = nonce->next;
+  }
+
+  new = malloc(msg->message_l);
+  if(!new)
+    return -1;
+
+  memset(new, 0, msg->message_l);
+  memcpy(new->nonce, msg->message, msg->message_l);
+  new->nonce_l = msg->message_l;
+
+  if(rluksd->nonce)
+    new->next = rluksd->nonce;
+
+  rluksd->nonce = new;
+
+  return 0;
 }

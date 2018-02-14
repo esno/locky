@@ -19,6 +19,7 @@ enum {
 };
 
 typedef struct rluksd_peer_t rluksd_peer_t;
+typedef struct rluksd_nonce_t rluksd_nonce_t;
 
 struct rluksd_peer_t {
   char addr[NI_MAXHOST];
@@ -39,6 +40,12 @@ typedef struct {
   rluksd_peer_t peer;
 } rluksd_message_t;
 
+struct rluksd_nonce_t {
+  unsigned char *nonce;
+  uint16_t nonce_l;
+  rluksd_nonce_t *next;
+};
+
 typedef struct {
   struct {
     int rluksd;
@@ -50,6 +57,7 @@ typedef struct {
   } config;
   EVP_PKEY *pubkey;
   rluksd_peer_t *peers;
+  rluksd_nonce_t *nonce;
 } rluksd_mgr_t;
 
 void rluksd_handle_req_auth(rluksd_mgr_t *rluksd, rluksd_message_t *msg);
@@ -57,5 +65,6 @@ void rluksd_handle_requests(rluksd_mgr_t *rluksd);
 int rluksd_parse_args(rluksd_mgr_t *rluksd, int argc, char *argv[]);
 void rluksd_register_peer(rluksd_mgr_t *rluksd, rluksd_peer_t *peer);
 void rluksd_usage(void);
+int rluksd_verify_nonce(rluksd_mgr_t *rluksd, rluksd_message_t *msg);
 
 #endif

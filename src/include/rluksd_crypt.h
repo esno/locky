@@ -6,6 +6,6 @@
 #include "rluksd.h"
 
 EVP_PKEY *rluksd_crypt_read_pubkey(char *pubkey_file);
-int rluksd_crypt_verify_signature(rluksd_message_t *msg);
+int rluksd_crypt_verify_signature(rluksd_mgr_t *rluksd, rluksd_message_t *msg);
 
 #endif

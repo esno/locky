@@ -26,7 +26,18 @@ EVP_PKEY *rluksd_crypt_read_pubkey(char *pubkey_file)
   return pkey;
 }
 
-int rluksd_crypt_verify_signature(rluksd_message_t *msg)
+int rluksd_crypt_verify_signature(rluksd_mgr_t *rluksd, rluksd_message_t *msg)
 {
-  // do something
+  EVP_MD_CTX *ctx;
+  const EVP_MD *md;
+
+  ctx = EVP_MD_CTX_create();
+  md = EVP_get_digestbyname("sha256");
+  EVP_DigestInit_ex(ctx, md, NULL);
+  EVP_DigestUpdate(ctx, msg->message, msg->message_l);
+
+  if(EVP_VerifyFinal(ctx, msg->signature, msg->signature_l, rluksd->pubkey) == 1)
+    return 0;
+
+  return -1;
 }
