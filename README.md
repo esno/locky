@@ -36,6 +36,8 @@ install dependencies
 * openssl
 * cryptsetup
 
+### build
+
     make
 
 ## usage
