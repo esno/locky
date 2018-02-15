@@ -2,8 +2,33 @@
 #include <sys/stat.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <openssl/engine.h>
 
 #include "rluksd_crypt.h"
+
+void rluksd_crypt_encrypt_asym(EVP_PKEY *pubkey, rluksd_message_t *crypt, rluksd_message_t *data)
+{
+  EVP_PKEY_CTX *ctx;
+  ENGINE *eng;
+  size_t o;
+
+  eng = ENGINE_get_default_RSA();
+  ctx = EVP_PKEY_CTX_new(pubkey, eng);
+
+  if(ctx &&
+      EVP_PKEY_encrypt_init(ctx) > 0 &&
+      EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING) > 0 &&
+      EVP_PKEY_encrypt(ctx, NULL, &o, data->message, data->message_l) > 0)
+  {
+    crypt->message_l = o;
+    crypt->message = OPENSSL_malloc(crypt->message_l);
+
+    if(crypt->message)
+      EVP_PKEY_encrypt(ctx, crypt->message, &o, data->message, data->message_l);
+    else
+      crypt->message_l = 0;
+  }
+}
 
 EVP_PKEY *rluksd_crypt_read_pubkey(char *pubkey_file)
 {

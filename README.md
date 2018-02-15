@@ -1,16 +1,46 @@
-# locky
+# rluksd
 
-locky is a daemon that opens an upd socket and waits for a msg signed by your private rsa key.
-After the signature verification locky starts a key exchange for symmetric cryptography.
-Now the client has to send the luks cipher. Locky forwards this key via `unix socket` to `luksd`.
+rluksd is a daemon written to control luks containers remotely.
+It uses udp datagrams to make it harder for network scanners to detect an internet
+facing system.
+
+The daemon is completely in silent mode. That means it's waiting for authentication
+messages with a valid signature. After signature verification rluksd generates a
+random key for symmetric encryption/decryption and sends that secret to the client.
+The shared secret will be encrypted by an asymmetric encryption using the same public key
+as for signature verification.
+
+After a succcessful key exchange the client is allowed to request information about the state
+of luks containers and can send a key to decrypt one of them.
+
+rluksd provides a lean way to secure your data on remote machines like servers hosted in any kind
+of datacenter. It's designed to prevent opening ssh for the public and aimes to use as less
+dependencies as possible.
+
+Last but not least the whole rluksd setup is shipped in two separated binaries to ensure
+that only the part that requires root privileges runs as root. The network communication
+can be done in an unprivileged user context.
+
+## benefits
+
+* each peer has it's own shared secret
+* package replay protection by using nonce for authentication
+* no broadcasting (it only responds to authenticated peers when they requesting something
+* privilege separation
+* less dependencies
 
 ## build instructions
 
-    make locky
+install dependencies
+
+* openssl
+* cryptsetup
+
+    make
 
 ## usage
 
-    ./locky <publicKey>
+    ./rluksd <publicKey> <socket>
 
 ## protocol
 
@@ -22,24 +52,28 @@ Now the client has to send the luks cipher. Locky forwards this key via `unix so
 
 | code | method |
 | ---- | ------ |
-| 0x31 | auth   |
-| 0x32 | unlock |
+| 0x01 | auth   |
+| 0x02 | status |
+| 0x03 | unlock |
+| 0x04 | lock   |
 
 #### auth
 
-| size   | message | signature |
-| ------ | ------- | --------- |
-| 2 byte | n byte  | n byte    |
+| message_l | signature_l | message   | signature |
+| --------- | ----------- | --------- | --------- |
+| 2 byte    | n byte      | n byte    | n byte    |
 
-`size` is the size of `message`
+`message_l` and `signature_l` defines the `message` and `signature` length
 
 if signature is fine the server generates a random key and sends it ecrypted to the client.
 
-| secret |
-| ------ |
-| n byte |
+| secret_l | secret |
+| -------- | ------ |
+| 2 byte   | n byte |
 
-#### unlock
+`secret_l` defines the secret length
+
+#### unlock (wip)
 
 | iv      | crypt  |
 | ------- | ------ |

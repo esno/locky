@@ -1,5 +1,8 @@
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
+#include <syscall.h>
+#include <linux/random.h>
 
 #include "rluksd.h"
 #include "rluksd_crypt.h"
@@ -56,12 +59,24 @@ int main(int argc, char *argv[])
 
 void rluksd_handle_req_auth(rluksd_mgr_t *rluksd, rluksd_message_t *msg)
 {
+  rluksd_peer_t *peer = NULL;
+  rluksd_message_t response;
+
+  memset(&response, 0, sizeof(rluksd_message_t));
+
   if(msg->message && msg->signature)
   {
     if(rluksd_verify_nonce(rluksd, msg) == 0 &&
         rluksd_crypt_verify_signature(rluksd, msg) == 0)
     {
-      rluksd_register_peer(rluksd, &msg->peer);
+      peer = rluksd_register_peer(rluksd, &msg->peer);
+
+      if(peer)
+      {
+        response.message = peer->cipher;
+        response.message_l = RLUKSD_CRYPT_SYM_KEY_SIZE;
+        rluksd_send_asym(rluksd, peer, &response);
+      }
     }
   }
 }
@@ -98,9 +113,51 @@ int rluksd_parse_args(rluksd_mgr_t *rluksd, int argc, char *argv[])
   return 2;
 }
 
-void rluksd_register_peer(rluksd_mgr_t *rluksd, rluksd_peer_t *peer)
+rluksd_peer_t *rluksd_register_peer(rluksd_mgr_t *rluksd, rluksd_peer_t *peer)
 {
-  // do something
+  rluksd_peer_t *ptr = rluksd->peers;
+  rluksd_peer_t *new;
+
+  while(ptr)
+  {
+    if(strcmp(peer->addr, ptr->addr) == 0 &&
+        strcmp(peer->port, ptr->port) == 0)
+    {
+      syscall(SYS_getrandom, &ptr->cipher, RLUKSD_CRYPT_SYM_KEY_SIZE, GRND_NONBLOCK);
+      return ptr;
+    }
+
+    ptr = ptr->next;
+  }
+
+  new = malloc(sizeof(rluksd_peer_t));
+  if(!new)
+    return NULL;
+
+  memset(new, 0, sizeof(rluksd_peer_t));
+  strcpy(new->addr, peer->addr);
+  strcpy(new->addr, peer->addr);
+  syscall(SYS_getrandom, &new->cipher, RLUKSD_CRYPT_SYM_KEY_SIZE, GRND_NONBLOCK);
+
+  if(rluksd->peers)
+    new->next = rluksd->peers;
+
+  rluksd->peers = new;
+
+  return new;
+}
+
+void rluksd_send_asym(rluksd_mgr_t *rluksd, rluksd_peer_t *peer, rluksd_message_t *data)
+{
+  rluksd_message_t crypt;
+
+  memset(&crypt, 0, sizeof(rluksd_message_t));
+  rluksd_crypt_encrypt_asym(rluksd->pubkey, &crypt, data);
+
+  if(crypt.message_l > 0)
+  {
+    rluksd_net_send(rluksd->socket.rluksd, peer, &crypt);
+  }
 }
 
 void rluksd_usage(void)

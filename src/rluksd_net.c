@@ -152,3 +152,8 @@ void rluksd_net_parse_method(int socket, rluksd_message_t *msg)
       NI_NUMERICHOST);
   }
 }
+
+void rluksd_net_send(int socket, rluksd_peer_t *peer, rluksd_message_t *msg)
+{
+  // do something
+}

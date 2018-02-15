@@ -1,4 +1,3 @@
-LDFLAGS_LOCKY += -lcrypto -lssl ${LDFLAGS}
 LDFLAGS_LUKSD += -lcryptsetup ${LDFLAGS}
 
 all: rluksd luksd
@@ -21,7 +20,7 @@ rluksd_net.o:
 
 rluksd: rluksd_luksd.o rluksd_crypt.o rluksd_net.o
 	${CC} -c src/rluksd.c -I./src/include
-	${CC} -o rluksd rluksd_luksd.o rluksd_crypt.o rluksd_net.o rluksd.o -lcrypto -lssl
+	${CC} -o rluksd rluksd_luksd.o rluksd_crypt.o rluksd_net.o rluksd.o -lcrypto -lssl ${LDFLAGS}
 
 luksd:
 	${CC} src/luksd.c -o luksd ${LDFLAGS_LUKSD}

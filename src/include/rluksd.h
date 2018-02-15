@@ -63,7 +63,8 @@ typedef struct {
 void rluksd_handle_req_auth(rluksd_mgr_t *rluksd, rluksd_message_t *msg);
 void rluksd_handle_requests(rluksd_mgr_t *rluksd);
 int rluksd_parse_args(rluksd_mgr_t *rluksd, int argc, char *argv[]);
-void rluksd_register_peer(rluksd_mgr_t *rluksd, rluksd_peer_t *peer);
+rluksd_peer_t *rluksd_register_peer(rluksd_mgr_t *rluksd, rluksd_peer_t *peer);
+void rluksd_send_asym(rluksd_mgr_t *rluksd, rluksd_peer_t *peer, rluksd_message_t *data);
 void rluksd_usage(void);
 int rluksd_verify_nonce(rluksd_mgr_t *rluksd, rluksd_message_t *msg);
 
