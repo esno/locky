@@ -155,5 +155,22 @@ void rluksd_net_parse_method(int socket, rluksd_message_t *msg)
 
 void rluksd_net_send(int socket, rluksd_peer_t *peer, rluksd_message_t *msg)
 {
-  // do something
+  struct addrinfo hints, *res;
+  uint16_t buffer_l = htons(msg->message_l + 2);
+  unsigned char buffer[buffer_l];
+  int n;
+
+  memcpy(&buffer, &buffer_l, sizeof(uint16_t));
+  memcpy(&buffer[2], buffer, msg->message_l);
+
+  memset(&hints, 0, sizeof(struct addrinfo));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_DGRAM;
+
+  n = getaddrinfo(peer->addr, peer->port, &hints, &res);
+  if(n >= 0)
+    sendto(socket, buffer, buffer_l, 0,
+      res->ai_addr, res->ai_addrlen);
+
+  freeaddrinfo(res);
 }
