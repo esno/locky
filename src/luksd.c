@@ -4,9 +4,24 @@
 #include "luksd.h"
 #include "luksd_socket.h"
 
-void luksd_handle_requests(luksd_mgr_t *luksd)
+void luksd_handle_req_status(luksd_mgr_t *luksd, luksd_message_t *msg)
 {
   // do something
+}
+
+void luksd_handle_requests(luksd_mgr_t *luksd)
+{
+  luksd_message_t msg;
+
+  memset(&msg, 0, sizeof(luksd_message_t));
+  luksd_socket_handle_requests(luksd, &msg);
+
+  switch(msg.method)
+  {
+    case LUKSD_SOCKET_REQ_METHOD_STATUS:
+      luksd_handle_req_status(luksd, &msg);
+      break;
+  }
 }
 
 int luksd_parse_args(luksd_mgr_t *luksd, int argc, char *argv[])
