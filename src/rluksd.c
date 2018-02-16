@@ -93,6 +93,12 @@ void rluksd_handle_requests(rluksd_mgr_t *rluksd)
     case RLUKSD_NET_REQ_METHOD_AUTH:
       rluksd_handle_req_auth(rluksd, &msg);
       break;
+    case RLUKSD_NET_REQ_METHOD_STATUS:
+      break;
+    case RLUKSD_NET_REQ_METHOD_UNLOCK:
+      break;
+    case RLUKSD_NET_REQ_METHOD_LOCK:
+      break;
   }
 }
 
