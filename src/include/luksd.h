@@ -23,7 +23,7 @@ typedef struct {
   uint16_t name_l;
   unsigned char *path;
   uint16_t path_l;
-  unsigned char uuid[36];
+  unsigned char uuid[37];
   crypt_status_info status;
 } luksd_device_t;
 

@@ -148,28 +148,10 @@ void luksd_socket_parse_status(luksd_message_t *msg)
 
 void luksd_socket_send_status(int socket, luksd_device_t *device)
 {
-  unsigned char *chunk;
-  int size = 1, offset = 0;
+  unsigned char chunk[2];
 
-  size += sizeof(uint16_t) + device->name_l;
-  size += sizeof(uint16_t) + device->path_l;
-  size += sizeof(device->status);
+  chunk[0] = LUKSD_SOCKET_REQ_METHOD_STATUS;
+  chunk[1] = device->status;
 
-  chunk = malloc(size);
-
-  if(chunk)
-  {
-    chunk[0] = LUKSD_SOCKET_REQ_METHOD_STATUS;
-    memcpy(&chunk[1], &device->name_l, sizeof(uint16_t));
-    memcpy(&chunk[3], &device->path_l, sizeof(uint16_t));
-    memcpy(&chunk[5], &device->status, sizeof(device->status));
-
-    offset = 5 + sizeof(device->status);
-    memcpy(&chunk[offset], &device->name, sizeof(device->name_l));
-    offset += device->name_l;
-    memcpy(&chunk[offset], &device->path, sizeof(device->path_l));
-
-    send(socket, chunk, size, 0);
-    free(chunk);
-  }
+  send(socket, &chunk, sizeof(chunk), 0);
 }
