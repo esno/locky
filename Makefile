@@ -1,4 +1,4 @@
-all: rluksd luksd
+all: rluksd luksd luks
 
 keys:
 	install -m 0700 -d keys
@@ -30,5 +30,9 @@ luksd: luksd_cryptsetup.o luksd_socket.o
 	${CC} -c ./src/luksd.c -I./src/include
 	${CC} -o ./luksd ./luksd_cryptsetup.o ./luksd_socket.o ./luksd.o -lcryptsetup ${LDFLAGS}
 
+luks:
+	${CC} -c ./src/luks.c -I./src/include
+	${CC} -o ./luks ./luks.o ${LDFLAGS}
+
 clean:
-	rm -rf ./rluksd ./luksd ./*.o
+	rm -rf ./rluksd ./luksd ./luks ./*.o

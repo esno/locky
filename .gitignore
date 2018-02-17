@@ -1,4 +1,5 @@
 /keys/*
 /rluksd
 /luksd
+/luks
 /*.o

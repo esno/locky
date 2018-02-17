@@ -96,7 +96,7 @@ internet.
 
 ## usage
 
-    ./uksd <socketOwner> <socketGroup> [<socket>]
+    ./luksd <socketOwner> <socketGroup> [<socket>]
 
 ## protocol
 
@@ -129,20 +129,18 @@ internet.
 see [libcryptsetup](https://gitlab.com/cryptsetup/cryptsetup/wikis/API/group__crypt-devstat.html#ga94309106213ec66fb196a32d73eefb5b)
 for more information about available states.
 
-# unlock
+# luks
 
-`unlock` is the reference cli client for `locky` written in lua.
+`luks` is the reference cli client for `rluksd/luksd`.
 
-## install
+## build instructions
 
-_requires lua 5.3_
+    make luks
 
-    luarocks install locky
+## usage
+
+    ./luks status /dev/sdb1 mycrypto /run/luksd.sock
 
 ## generate keys
 
     make keys
-
-## usage
-
-    ./unlock <host> <privateKey>
