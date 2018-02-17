@@ -2,11 +2,21 @@
 #include <string.h>
 
 #include "luksd.h"
+#include "luksd_cryptsetup.h"
 #include "luksd_socket.h"
 
 void luksd_handle_req_status(luksd_mgr_t *luksd, luksd_message_t *msg)
 {
-  // do something
+  luksd_device_t device;
+
+  memset(&device, 0, sizeof(luksd_device_t));
+  device.name = msg->name;
+  device.name_l = msg->name_l;
+  device.path = msg->path;
+  device.path_l = msg->path_l;
+
+  if(luksd_cryptsetup_read_device(&device) == 0)
+    luksd_socket_send_status(msg->socket, &device);
 }
 
 void luksd_handle_requests(luksd_mgr_t *luksd)
@@ -22,6 +32,8 @@ void luksd_handle_requests(luksd_mgr_t *luksd)
       luksd_handle_req_status(luksd, &msg);
       break;
   }
+
+  luksd_socket_free_msg(&msg);
 }
 
 int luksd_parse_args(luksd_mgr_t *luksd, int argc, char *argv[])

@@ -10,6 +10,12 @@
 #include "luksd.h"
 #include "luksd_socket.h"
 
+void luksd_socket_free_msg(luksd_message_t *msg)
+{
+  if(msg->name) free(msg->name);
+  if(msg->path) free(msg->path);
+}
+
 void luksd_socket_handle_requests(luksd_mgr_t *luksd, luksd_message_t *msg)
 {
   int fd = -1;
@@ -93,32 +99,77 @@ void luksd_socket_parse_method(int socket, luksd_message_t *msg)
 
 void luksd_socket_parse_status(luksd_message_t *msg)
 {
-  unsigned char chunk_l[LUKSD_SOCKET_HEADER_LENGTH_SIZE];
-  unsigned char chunk[LUKSD_SOCKET_PAYLOAD_SIZE];
-  uint16_t message_l = 0;
-  int n = 0;
+  unsigned char chunk_nl[LUKSD_SOCKET_HEADER_LENGTH_SIZE];
+  unsigned char chunk_pl[LUKSD_SOCKET_HEADER_LENGTH_SIZE];
+  unsigned char chunk_n[LUKSD_SOCKET_PAYLOAD_SIZE];
+  unsigned char chunk_p[LUKSD_SOCKET_PAYLOAD_SIZE];
+  uint16_t name_l = 0, path_l = 0;
+  int n = 0, p = 0;
 
-  memset(&chunk_l, 0, sizeof(chunk_l));
-  memset(&chunk, 0, sizeof(chunk));
+  memset(&chunk_nl, 0, sizeof(chunk_nl));
+  memset(&chunk_pl, 0, sizeof(chunk_pl));
+  memset(&chunk_n, 0, sizeof(chunk_n));
+  memset(&chunk_p, 0, sizeof(chunk_p));
 
-  n = recv(msg->socket, chunk_l, sizeof(chunk_l), 0);
-  if(n == LUKSD_SOCKET_HEADER_LENGTH_SIZE)
+  n = recv(msg->socket, chunk_nl, sizeof(chunk_nl), 0);
+  p = recv(msg->socket, chunk_pl, sizeof(chunk_pl), 0);
+
+  if(n == LUKSD_SOCKET_HEADER_LENGTH_SIZE &&
+    p == LUKSD_SOCKET_HEADER_LENGTH_SIZE)
   {
-    memcpy(&message_l, chunk_l, sizeof(uint16_t));
+    memcpy(&name_l, chunk_nl, sizeof(uint16_t));
+    memcpy(&path_l, chunk_pl, sizeof(uint16_t));
 
-    if(message_l <= LUKSD_SOCKET_PAYLOAD_SIZE)
+    if(name_l <= LUKSD_SOCKET_PAYLOAD_SIZE &&
+      path_l <= LUKSD_SOCKET_PAYLOAD_SIZE)
     {
-      n = recv(msg->socket, &chunk, message_l, 0);
-      if(n == message_l)
+      n = recv(msg->socket, &chunk_n, name_l, 0);
+      p = recv(msg->socket, &chunk_p, path_l, 0);
+      if(n == name_l && p == path_l)
       {
-        msg->message = malloc(message_l);
+        msg->name = malloc(name_l);
+        msg->path = malloc(path_l);
 
-	if(msg->message)
+	if(msg->name)
         {
-	  memcpy(msg->message, &chunk, message_l);
-	  msg->message_l = message_l;
+	  memcpy(msg->name, &chunk_n, name_l);
+	  msg->name_l = name_l;
+	}
+
+	if(msg->path)
+        {
+	  memcpy(msg->path, &chunk_p, path_l);
+	  msg->path_l = path_l;
 	}
       }
     }
+  }
+}
+
+void luksd_socket_send_status(int socket, luksd_device_t *device)
+{
+  unsigned char *chunk;
+  int size = 1, offset = 0;
+
+  size += sizeof(uint16_t) + device->name_l;
+  size += sizeof(uint16_t) + device->path_l;
+  size += sizeof(device->status);
+
+  chunk = malloc(size);
+
+  if(chunk)
+  {
+    chunk[0] = LUKSD_SOCKET_REQ_METHOD_STATUS;
+    memcpy(&chunk[1], &device->name_l, sizeof(uint16_t));
+    memcpy(&chunk[3], &device->path_l, sizeof(uint16_t));
+    memcpy(&chunk[5], &device->status, sizeof(device->status));
+
+    offset = 5 + sizeof(device->status);
+    memcpy(&chunk[offset], &device->name, sizeof(device->name_l));
+    offset += device->name_l;
+    memcpy(&chunk[offset], &device->path, sizeof(device->path_l));
+
+    send(socket, chunk, size, 0);
+    free(chunk);
   }
 }

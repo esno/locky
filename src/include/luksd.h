@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <stdint.h>
+#include <libcryptsetup.h>
 
 #define LUKSD_SOCKET_FILE_PATH "/run/luksd.sock"
 #define LUKSD_SOCKET_HEADER_LENGTH_SIZE 2
@@ -16,8 +18,20 @@ enum {
 };
 
 typedef struct {
-  unsigned char *message;
-  uint16_t message_l;
+  struct crypt_device *ctx;
+  unsigned char *name;
+  uint16_t name_l;
+  unsigned char *path;
+  uint16_t path_l;
+  unsigned char uuid[36];
+  crypt_status_info status;
+} luksd_device_t;
+
+typedef struct {
+  unsigned char *name;
+  uint16_t name_l;
+  unsigned char *path;
+  uint16_t path_l;
   int socket;
   unsigned char method;
 } luksd_message_t;

@@ -1,5 +1,3 @@
-LDFLAGS_LUKSD += -lcryptsetup ${LDFLAGS}
-
 all: rluksd luksd
 
 keys:
@@ -13,7 +11,7 @@ rluksd_luksd.o:
 	${CC} -c ./src/rluksd_luksd.c -I./src/include
 
 rluksd_crypt.o:
-	${CC} -c ./src/rluksd_crypt.c -I./src/include -lcrypto -lssl
+	${CC} -c ./src/rluksd_crypt.c -I./src/include
 
 rluksd_net.o:
 	${CC} -c ./src/rluksd_net.c -I./src/include
@@ -22,12 +20,15 @@ rluksd: rluksd_luksd.o rluksd_crypt.o rluksd_net.o
 	${CC} -c ./src/rluksd.c -I./src/include
 	${CC} -o ./rluksd ./rluksd_luksd.o ./rluksd_crypt.o ./rluksd_net.o ./rluksd.o -lcrypto -lssl ${LDFLAGS}
 
+luksd_cryptsetup.o:
+	${CC} -c ./src/luksd_cryptsetup.c -I./src/include
+
 luksd_socket.o:
 	${CC} -c ./src/luksd_socket.c -I./src/include
 
-luksd: luksd_socket.o
+luksd: luksd_cryptsetup.o luksd_socket.o
 	${CC} -c ./src/luksd.c -I./src/include
-	${CC} -o ./luksd ./luksd_socket.o ./luksd.o ${LDFLAGS}
+	${CC} -o ./luksd ./luksd_cryptsetup.o ./luksd_socket.o ./luksd.o -lcryptsetup ${LDFLAGS}
 
 clean:
 	rm -rf ./rluksd ./luksd ./*.o
