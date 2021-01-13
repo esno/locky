@@ -1,7 +1,7 @@
 #ifndef _RLUKSD_SYSFS_H
 #define _RLUKSD_SYSFS_H 1
 
-#include "rluksd.h"
+#include "rluksd/device.h"
 
 int rluksd_sysfs_discover_devices(void);
 int rluksd_sysfs_discover_parent(const char *name, rluksd_device_t *device);

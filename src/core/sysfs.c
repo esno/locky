@@ -6,7 +6,7 @@
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
 
-#include "rluksd.h"
+#include "rluksd/device.h"
 #include "rluksd/sysfs.h"
 
 #define __RLUKSD_SYSFS_DEV_BLK_PATH "/sys/dev/block"
@@ -65,7 +65,7 @@ static char *__read_dm_uuid(const char *name) {
 int rluksd_sysfs_discover_devices(void) {
   DIR *d;
   struct dirent *entry;
-  rluksd_device_t device;
+  rluksd_device_t *device;
 
   d = opendir(__RLUKSD_SYSFS_DEV_BLK_PATH);
   if (d == NULL) {
@@ -74,20 +74,25 @@ int rluksd_sysfs_discover_devices(void) {
   }
 
   while ((entry = readdir(d)) != NULL) {
-    memset(&device, 0, sizeof(rluksd_device_t));
-    if (sscanf(entry->d_name, "%d:%d", &device.major, &device.minor) != 2)
+    device = malloc(sizeof(rluksd_device_t));
+    if (device == NULL)
       continue;
 
-    fprintf(stdout, "[sysfs] found device %d:%d\n", device.major, device.minor);
-    device.id = makedev(device.major, device.minor);
+    memset(device, 0, sizeof(rluksd_device_t));
+    if (sscanf(entry->d_name, "%d:%d", &device->major, &device->minor) != 2) {
+      rluksd_device_free(device);
+      continue;
+    }
 
-    if (__is_luks(entry->d_name) == 0) {
-      if (rluksd_sysfs_read_device_info(entry->d_name, &device) == 0) {
-        rluksd_sysfs_discover_parent(entry->d_name, &device);
-        free(device.parent);
-        free(device.luks.name);
-        free(device.luks.uuid);
-      }
+    fprintf(stdout, "[sysfs] found device %d:%d\n", device->major, device->minor);
+    device->id = makedev(device->major, device->minor);
+
+    if (__is_luks(entry->d_name) == 0 &&
+        rluksd_sysfs_read_device_info(entry->d_name, device) == 0 &&
+        rluksd_sysfs_discover_parent(entry->d_name, device)) {
+      rluksd_device_add(device);
+    } else {
+      rluksd_device_free(device);
     }
   }
 
