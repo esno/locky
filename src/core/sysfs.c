@@ -89,10 +89,11 @@ int rluksd_sysfs_discover_devices(void) {
 
     if (__is_luks(entry->d_name) == 0 &&
         rluksd_sysfs_read_device_info(entry->d_name, device) == 0 &&
-        rluksd_sysfs_discover_parent(entry->d_name, device)) {
+        rluksd_sysfs_discover_parent(entry->d_name, device) == 0) {
       rluksd_device_add(device);
     } else {
       rluksd_device_free(device);
+      device = NULL;
     }
   }
 
