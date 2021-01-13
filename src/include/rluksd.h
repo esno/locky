@@ -12,6 +12,7 @@ struct rluksd_device {
     char *name;
     char *uuid;
   } luks;
+  char *parent;
   rluksd_device_t *next;
   rluksd_device_t *prev;
 };

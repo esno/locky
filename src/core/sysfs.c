@@ -83,6 +83,8 @@ int rluksd_sysfs_discover_devices(void) {
 
     if (__is_luks(entry->d_name) == 0) {
       if (rluksd_sysfs_read_device_info(entry->d_name, &device) == 0) {
+        rluksd_sysfs_discover_parent(entry->d_name, &device);
+        free(device.parent);
         free(device.luks.name);
         free(device.luks.uuid);
       }
@@ -90,6 +92,36 @@ int rluksd_sysfs_discover_devices(void) {
   }
 
   closedir(d);
+
+  return 0;
+}
+
+int rluksd_sysfs_discover_parent(const char *name, rluksd_device_t *device) {
+  int l = strlen(__RLUKSD_SYSFS_DEV_BLK_PATH) + strlen(name) + 9;
+  DIR *d;
+  struct dirent *entry;
+  char path[l];
+  char *parent;
+
+  memset(path, 0, sizeof(char) * l);
+  snprintf(path, l, "%s/%s/slaves", __RLUKSD_SYSFS_DEV_BLK_PATH, name);
+  d = opendir(path);
+  if (d == NULL) {
+    fprintf(stderr, "[sysfs] device slaves not supported by your kernel\n");
+    return -1;
+  }
+
+  while ((entry = readdir(d)) != NULL) {
+    parent = malloc(sizeof(char) * strlen(entry->d_name));
+    if (parent == NULL)
+      return -2;
+
+    memset(parent, 0, sizeof(char) * strlen(entry->d_name));
+    memcpy(parent, entry->d_name, sizeof(char) * strlen(entry->d_name));
+    device->parent = parent;
+  }
+
+  fprintf(stdout, "[sysfs] identified %s as parent of %s\n", device->parent, device->luks.name);
 
   return 0;
 }
