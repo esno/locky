@@ -112,12 +112,12 @@ int rluksd_sysfs_discover_parent(const char *name, rluksd_device_t *device) {
   }
 
   while ((entry = readdir(d)) != NULL) {
-    parent = malloc(sizeof(char) * strlen(entry->d_name));
+    parent = malloc(sizeof(char) * (strlen(entry->d_name) + 1));
     if (parent == NULL)
       return -2;
 
-    memset(parent, 0, sizeof(char) * strlen(entry->d_name));
-    memcpy(parent, entry->d_name, sizeof(char) * strlen(entry->d_name));
+    memset(parent, 0, sizeof(char) * (strlen(entry->d_name) + 1));
+    strcpy(parent, entry->d_name);
     device->parent = parent;
   }
 
@@ -140,7 +140,7 @@ int rluksd_sysfs_read_device_info(const char *name, rluksd_device_t *device) {
     return -5;
   }
 
-  uuid = malloc(sizeof(char) * 33 + 1);
+  uuid = malloc(sizeof(char) * 33 + 4 + 1);
   if (uuid == NULL) {
     free(dmuuid);
     free(luksname);
@@ -150,7 +150,16 @@ int rluksd_sysfs_read_device_info(const char *name, rluksd_device_t *device) {
   memset(luksname, 0, sizeof(char) * (size - 46 + 1));
   memset(uuid, 0, sizeof(char) * (33 + 1));
   strncpy(luksname, &dmuuid[45], size - 46);
-  strncpy(uuid, &dmuuid[12], 32);
+
+  strncpy(uuid, &dmuuid[12], 8);
+  strcpy(&uuid[8], "-");
+  strncpy(&uuid[9], &dmuuid[20], 4);
+  strcpy(&uuid[13], "-");
+  strncpy(&uuid[14], &dmuuid[24], 4);
+  strcpy(&uuid[18], "-");
+  strncpy(&uuid[19], &dmuuid[28], 4);
+  strcpy(&uuid[23], "-");
+  strncpy(&uuid[24], &dmuuid[32], 12);
 
   fprintf(stdout, "[sysfs] identified open luks2 device %s (%s)\n", luksname, uuid);
 
