@@ -1,5 +1,1 @@
-/keys/*
-/rluksd
-/luksd
-/luks
-/*.o
+/build
