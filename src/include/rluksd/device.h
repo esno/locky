@@ -6,8 +6,8 @@
 typedef struct rluksd_device rluksd_device_t;
 struct rluksd_device {
   dev_t id;
-  int major;
-  int minor;
+  unsigned int major;
+  unsigned int minor;
   struct {
     char *name;
     char *uuid;

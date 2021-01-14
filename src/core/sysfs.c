@@ -30,8 +30,9 @@ static int __is_luks(const char *name) {
 }
 
 static char *__read_dm_uuid(const char *name) {
-  int l = strlen(__RLUKSD_SYSFS_DEV_BLK_PATH) + strlen(name) + 10;
-  int c, size;
+  size_t l = strlen(__RLUKSD_SYSFS_DEV_BLK_PATH) + strlen(name) + 10;
+  size_t size;
+  size_t c;
   char filename[l];
   char *dmuuid;
   FILE *fd;
@@ -43,14 +44,14 @@ static char *__read_dm_uuid(const char *name) {
     return NULL;
 
   fseek(fd, 0L, SEEK_END);
-  size = ftell(fd);
+  size = (size_t) ftell(fd);
   rewind(fd);
 
   dmuuid = malloc(sizeof(char) * size);
   if (dmuuid == NULL)
     return NULL;
 
-  if ((c = fread(dmuuid, 1, size, fd)) < 0) {
+  if ((c = fread(dmuuid, 1, size, fd)) != size) {
     free(dmuuid);
     fclose(fd);
     return NULL;
@@ -103,7 +104,7 @@ int rluksd_sysfs_discover_devices(void) {
 }
 
 int rluksd_sysfs_discover_parent(const char *name, rluksd_device_t *device) {
-  int l = strlen(__RLUKSD_SYSFS_DEV_BLK_PATH) + strlen(name) + 9;
+  size_t l = strlen(__RLUKSD_SYSFS_DEV_BLK_PATH) + strlen(name) + 9;
   DIR *d;
   struct dirent *entry;
   char path[l];
@@ -135,11 +136,12 @@ int rluksd_sysfs_discover_parent(const char *name, rluksd_device_t *device) {
 int rluksd_sysfs_read_device_info(const char *name, rluksd_device_t *device) {
   char *dmuuid = __read_dm_uuid(name);
   char *luksname, *uuid;
-  int size = strlen(dmuuid);
+  size_t size;
 
   if (dmuuid == NULL)
     return -1;
 
+  size = strlen(dmuuid);
   luksname = malloc(sizeof(char) * (size - 12 - 34) + 1);
   if (luksname == NULL) {
     free(dmuuid);
