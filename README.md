@@ -46,40 +46,40 @@ install dependencies
 
 ## protocol
 
-| method | payload |
-| ------ | ------- |
-| 1 byte | n byte  |
+    | method | payload |
+    | ------ | ------- |
+    | 1 byte | n byte  |
 
 ### methods
 
-| code | method |
-| ---- | ------ |
-| 0x01 | auth   |
-| 0x02 | status |
-| 0x03 | unlock |
-| 0x04 | lock   |
+    | code | method |
+    | ---- | ------ |
+    | 0x01 | auth   |
+    | 0x02 | status |
+    | 0x03 | unlock |
+    | 0x04 | lock   |
 
 #### auth
 
-| message_l | signature_l | message   | signature |
-| --------- | ----------- | --------- | --------- |
-| 2 byte    | 2 byte      | n byte    | n byte    |
+    | message_l | signature_l | message   | signature |
+    | --------- | ----------- | --------- | --------- |
+    | 2 byte    | 2 byte      | n byte    | n byte    |
 
 `message_l` and `signature_l` defines the `message` and `signature` length
 
 if signature is fine the server generates a random key and sends it ecrypted to the client.
 
-| secret_l | secret |
-| -------- | ------ |
-| 2 byte   | n byte |
+    | secret_l | secret |
+    | -------- | ------ |
+    | 2 byte   | n byte |
 
 `secret_l` defines the secret length
 
 #### unlock (wip)
 
-| iv      | crypt  |
-| ------- | ------ |
-| 16 byte | n byte |
+    | iv      | crypt  |
+    | ------- | ------ |
+    | 16 byte | n byte |
 
 `iv` has to be generated on sender site and has to be **unique** for each message.
 `crypt` is the encrypted token used at luks encryption.
@@ -100,31 +100,31 @@ internet.
 
 ## protocol
 
-| method | payload |
-| ------ | ------- |
-| 1 byte | n byte  |
+    | method | payload |
+    | ------ | ------- |
+    | 1 byte | n byte  |
 
 ### methods
 
-| code | method |
-| ---- | ------ |
-| 0x02 | status |
-| 0x03 | unlock |
-| 0x04 | lock   |
+    | code | method |
+    | ---- | ------ |
+    | 0x02 | status |
+    | 0x03 | unlock |
+    | 0x04 | lock   |
 
 #### status
 
 ##### request
 
-| name_l | path_l | name   | path   |
-| ------ | ------ | ------ | ------ |
-| 2 byte | 2 byte | n byte | n byte |
+    | name_l | path_l | name   | path   |
+    | ------ | ------ | ------ | ------ |
+    | 2 byte | 2 byte | n byte | n byte |
 
 ##### response
 
-| method | status |
-| ------ | ------ |
-| 1 byte | 1 byte |
+    | method | status |
+    | ------ | ------ |
+    | 1 byte | 1 byte |
 
 see [libcryptsetup](https://gitlab.com/cryptsetup/cryptsetup/wikis/API/group__crypt-devstat.html#ga94309106213ec66fb196a32d73eefb5b)
 for more information about available states.
