@@ -1,12 +1,12 @@
-# rluksd
+# rLUKSd
 
-rluksd is a daemon written to control luks containers remotely.
+rLUKSd is written to control luks (linux unified key setup) containers remotely.
 It uses udp datagrams to make it harder for network scanners to detect an internet
 facing system.
 
-The daemon is completely in silent mode. That means it's waiting for authentication
-messages with a valid signature. After signature verification rluksd generates a
-random key for symmetric encryption/decryption and sends that secret to the client.
+It's running completely in silent mode. That means it's waiting for authentication
+messages containing a valid signature. After the message signature verification,
+a random key for symmetric encryption/decryption will be generated and send to the client.
 The shared secret will be encrypted by an asymmetric encryption using the same public key
 as for signature verification.
 
@@ -21,7 +21,7 @@ Last but not least the whole rluksd setup is shipped in two separated binaries t
 that only the part that requires root privileges runs as root. The network communication
 can be done in an unprivileged user context.
 
-## benefits
+## Benefits
 
 * each peer has it's own shared secret
 * package replay protection by using nonce for authentication
@@ -29,118 +29,20 @@ can be done in an unprivileged user context.
 * privilege separation
 * less dependencies
 
-## build instructions
+## Build
 
-install dependencies
+    git clone https://github.com/esno/rluksd.git
+    mkdir build; cd build
+    cmake .. && make
 
-* openssl
-* cryptsetup
+## Components
 
-### build
-
-    make rluksd
-
-## usage
-
-    ./rluksd <publicKey> <socket>
-
-## protocol
-
-    | method | payload |
-    | ------ | ------- |
-    | 1 byte | n byte  |
-
-### methods
-
-    | code | method |
-    | ---- | ------ |
-    | 0x01 | auth   |
-    | 0x02 | status |
-    | 0x03 | unlock |
-    | 0x04 | lock   |
-
-#### auth
-
-    | message_l | signature_l | message   | signature |
-    | --------- | ----------- | --------- | --------- |
-    | 2 byte    | 2 byte      | n byte    | n byte    |
-
-`message_l` and `signature_l` defines the `message` and `signature` length
-
-if signature is fine the server generates a random key and sends it ecrypted to the client.
-
-    | secret_l | secret |
-    | -------- | ------ |
-    | 2 byte   | n byte |
-
-`secret_l` defines the secret length
-
-#### unlock (wip)
-
-    | iv      | crypt  |
-    | ------- | ------ |
-    | 16 byte | n byte |
-
-`iv` has to be generated on sender site and has to be **unique** for each message.
-`crypt` is the encrypted token used at luks encryption.
-
-# luksd
+### luksd
 
 luksd is the container management daemon. It opens an `unix socket` and waits for incoming requests.
 It is a seperate daemon to avoid running an application as root that will be available through the
 internet.
 
-## build instructions
-
-    make luksd
-
-## usage
+#### usage
 
     ./luksd <socketOwner> <socketGroup> [<socket>]
-
-## protocol
-
-    | method | payload |
-    | ------ | ------- |
-    | 1 byte | n byte  |
-
-### methods
-
-    | code | method |
-    | ---- | ------ |
-    | 0x02 | status |
-    | 0x03 | unlock |
-    | 0x04 | lock   |
-
-#### status
-
-##### request
-
-    | name_l | path_l | name   | path   |
-    | ------ | ------ | ------ | ------ |
-    | 2 byte | 2 byte | n byte | n byte |
-
-##### response
-
-    | method | status |
-    | ------ | ------ |
-    | 1 byte | 1 byte |
-
-see [libcryptsetup](https://gitlab.com/cryptsetup/cryptsetup/wikis/API/group__crypt-devstat.html#ga94309106213ec66fb196a32d73eefb5b)
-for more information about available states.
-
-# luks
-
-`luks` is the reference cli client for `rluksd/luksd`.
-
-## build instructions
-
-    make luks
-
-## usage
-
-    ./luks status /dev/sdb1 mycrypto /run/luksd.sock
-
-## generate keys
-
-    make keys
